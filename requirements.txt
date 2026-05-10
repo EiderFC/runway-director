@@ -1,7 +1,9 @@
-flask==3.0.3
+# Tested with Python 3.10–3.12 (recommended: 3.12).
+# Pillow 10.x does not provide Windows wheels for Python 3.13+; use 3.12 if possible.
+flask>=3.0.0
 openai>=1.25.0
 runwayml>=4.14.0
 moviepy==1.0.3
 requests>=2.31.0
-Pillow>=10.0.0,<11.0.0
+Pillow>=10.0.0
 imageio-ffmpeg>=0.4.9

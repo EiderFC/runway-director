@@ -1,3 +1,15 @@
+import sys
+if sys.version_info < (3, 9):
+    sys.exit("\n⚠ Python 3.9+ required. Detected: " + sys.version.split()[0] + "\n")
+if sys.version_info >= (3, 13):
+    print(
+        "\n⚠ Heads up: Python " + sys.version.split()[0] + " detected. "
+        "This project is tested on Python 3.10–3.12. Some dependencies "
+        "(notably Pillow) may need to compile from source on 3.13+.\n"
+        "If you see build errors, install Python 3.12 from python.org and retry.\n",
+        flush=True,
+    )
+
 import os
 import time
 import threading

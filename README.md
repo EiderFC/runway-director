@@ -23,11 +23,30 @@ GPT-4o writes an editable storyboard, locks the character identity across shots 
 - ⌨ Keyboard shortcuts (`⌘+Enter` plan/render, `T` theater, `ESC` exit)
 
 ## Run locally
+
+**Requirements**: Python **3.10, 3.11, or 3.12** (recommended: 3.12).
+Python 3.13+ is not yet recommended because Pillow 10 does not ship Windows wheels for it.
+
 ```bash
+# 1. Use Python 3.12 if you have it:
+py -3.12 -m venv venv          # Windows
+python3.12 -m venv venv        # macOS / Linux
+
+# 2. Activate the venv:
+venv\Scripts\activate          # Windows
+source venv/bin/activate       # macOS / Linux
+
+# 3. Install and run:
 pip install -r requirements.txt
 python app.py
 ```
+
 Open `http://localhost:5000`. Paste your OpenAI key + Runway secret in the top right (cached in localStorage).
+
+> **Don't have Python 3.12?** Download it from <https://www.python.org/downloads/release/python-3127/>.
+> During install, check **"Add python.exe to PATH"**.
+
+ffmpeg is bundled via `imageio-ffmpeg` — no system install needed.
 
 ## Tech stack
 - **Backend** — Flask, OpenAI SDK (gpt-4o, gpt-image-1, tts-1-hd), Runway SDK (`seedance2`)
