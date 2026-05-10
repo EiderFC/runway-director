@@ -1102,9 +1102,10 @@ body.theater .theater-exit-hint { display: block; }
           pill.onclick = () => selectTake(idx, ti);
           row.appendChild(pill);
         });
-        if(s.url && phase === 'done') {
+        if(s.url && masterUrl) {
           const remerge = document.createElement('button');
-          remerge.className = 'shot-btn'; remerge.style.marginLeft = 'auto';
+          remerge.className = 'shot-btn';
+          remerge.style.cssText = 'margin-left:auto; background:rgba(16,185,129,0.15); border-color:rgba(16,185,129,0.4); color:#4ade80; font-weight:800;';
           remerge.onclick = () => remergeMaster();
           remerge.innerHTML = '↻ Apply to master';
           row.appendChild(remerge);
