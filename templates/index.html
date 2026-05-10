@@ -827,11 +827,9 @@ body.theater .theater-exit-hint { display: block; }
       const data = await res.json();
       if(!res.ok) return showToast(data.error || "Re-roll error", "error");
       showToast(`Re-rolling shot ${idx+1}…`);
+      // Pause the master so it doesn't keep playing while we re-roll
+      const player = $('masterPlayer'); if(player) { try { player.pause(); } catch(e){} }
       card.classList.remove('ready'); card.classList.add('rendering');
-      const thumb = card.querySelector('.shot-thumb, .shot-thumb-skel');
-      if(thumb && thumb.tagName === 'VIDEO') {
-        thumb.outerHTML = '<div class="shot-thumb-skel">RE-ROLLING…</div>';
-      }
       startPolling();
     } catch(e) { showToast("Network error", "error"); }
   }
@@ -969,10 +967,16 @@ body.theater .theater-exit-hint { display: block; }
 
         const targetUrl = (currentVersion === 'trailer' && trailerUrl) ? trailerUrl : masterUrl;
         const player = $('masterPlayer');
-        const cur = (player.src || '').split('?')[0];
-        const want = targetUrl.split('?')[0];
-        if(cur !== want || targetUrl.includes('?v=')) {
+        // Compare by pathname only (player.src is absolute, target is relative)
+        const curPath = (() => { try { return new URL(player.src, location.href).pathname; } catch(e){ return ''; } })();
+        const wantPath = (() => { try { return new URL(targetUrl, location.href).pathname; } catch(e){ return targetUrl.split('?')[0]; } })();
+        const hasVersionParam = targetUrl.includes('?v=');
+        const lastV = player.dataset.versionTag || '';
+        const newV = (targetUrl.match(/\?v=(\d+)/) || [, ''])[1];
+        const versionChanged = hasVersionParam && newV && newV !== lastV;
+        if(curPath !== wantPath || versionChanged) {
           player.src = targetUrl; player.muted = false; player.volume = 0.9;
+          if(newV) player.dataset.versionTag = newV;
         }
         $('downloadMasterBtn').href = targetUrl;
         $('downloadActions').style.display = 'flex';
@@ -1060,20 +1064,22 @@ body.theater .theater-exit-hint { display: block; }
 
       // thumbnail
       const existingThumb = card.querySelector('.shot-thumb, .shot-thumb-skel');
-      if(s.url) {
-        if(!existingThumb || existingThumb.tagName !== 'VIDEO' || existingThumb.src !== s.url) {
+      const isRerolling = (s.status === 'rendering' && s.url);
+      if(s.url && !isRerolling) {
+        if(!existingThumb || existingThumb.tagName !== 'VIDEO' || !existingThumb.src.endsWith(s.url)) {
           const v = document.createElement('video');
           v.className = 'shot-thumb'; v.src = s.url;
           v.autoplay = true; v.loop = true; v.muted = true; v.playsInline = true;
           if(existingThumb) existingThumb.replaceWith(v); else card.prepend(v);
         }
       } else {
+        const label = isRerolling ? 'RE-ROLLING…' : (s.status === 'rendering' ? 'RENDERING…' : 'PLANNED');
         if(existingThumb && existingThumb.tagName === 'VIDEO') {
           const sk = document.createElement('div'); sk.className = 'shot-thumb-skel';
-          sk.innerText = s.status === 'rendering' ? 'RENDERING…' : 'PLANNED';
+          sk.innerText = label;
           existingThumb.replaceWith(sk);
         } else if (existingThumb) {
-          existingThumb.innerText = s.status === 'rendering' ? 'RENDERING…' : 'PLANNED';
+          existingThumb.innerText = label;
         }
       }
 

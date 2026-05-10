@@ -389,29 +389,25 @@ def runway_render_shot(runway_client, prompt_text, ratio, duration, image_refs, 
             last_err = str(e)
             return None
 
-    # Phase A
-    for i in range(2):
-        wlog(f"   [→] Attempt A{i+1}: original prompt + refs", "normal")
-        url = attempt(prompt_text, image_refs)
-        if url: return url, prompt_text
-        wlog(f"   [x] {last_err[:160]}", "error")
-        time.sleep(3 * (i + 1))
+    # Phase A — original prompt with refs (1 attempt, transient/network)
+    wlog("   [→] Attempt A: original prompt + refs", "normal")
+    url = attempt(prompt_text, image_refs)
+    if url: return url, prompt_text
+    wlog(f"   [x] {last_err[:160]}", "error")
 
-    # Phase B
+    # Phase B — drop image reference (refs may be unsupported)
     if image_refs:
         wlog("   [→] Attempt B: dropping image reference", "warning")
         url = attempt(prompt_text, None)
         if url: return url, prompt_text
         wlog(f"   [x] {last_err[:160]}", "error")
 
-    # Phase C — rewritten by GPT
+    # Phase C — rewritten by GPT (1 attempt)
     rewritten = rewrite_prompt(openai_client, prompt_text)
-    for i in range(2):
-        wlog(f"   [→] Attempt C{i+1}: rewritten prompt, no refs", "warning")
-        url = attempt(rewritten, None)
-        if url: return url, rewritten
-        wlog(f"   [x] {last_err[:160]}", "error")
-        time.sleep(3)
+    wlog("   [→] Attempt C: rewritten prompt, no refs", "warning")
+    url = attempt(rewritten, None)
+    if url: return url, rewritten
+    wlog(f"   [x] {last_err[:160]}", "error")
 
     # Phase D — last resort: very generic neutral version
     final = rewrite_prompt(openai_client, rewritten)
@@ -932,9 +928,12 @@ def reroll_worker(data):
         with STATE_LOCK:
             if new_action:
                 STATE["shots"][idx]["action"] = new_action
+            STATE["shots"][idx]["status"] = "rendering"
+            STATE["current_shot"] = idx + 1
             shot = STATE["shots"][idx]
             character_bible = STATE["character_bible"]
             last_url = STATE["shots"][idx - 1]["url"] if idx > 0 else ""
+        set_status(f"Re-rolling shot {idx+1}…", phase="rerolling")
 
         prompt = compose_shot_prompt(
             character_bible, shot["action"], camera, art_style, motion, audio_prompt, ratio=ratio
@@ -965,6 +964,13 @@ def reroll_worker(data):
         set_status(f"Shot {idx+1} re-rolled.", phase="awaiting_approval")
     except Exception as e:
         wlog(f"❌ Re-roll failed: {e}", "error")
+        with STATE_LOCK:
+            try:
+                idx_local = int(data.get("shot_index", -1))
+                if 0 <= idx_local < len(STATE["shots"]):
+                    STATE["shots"][idx_local]["status"] = "ready"
+            except Exception:
+                pass
         set_status(f"Re-roll error: {e}", phase="error")
     finally:
         with STATE_LOCK:
