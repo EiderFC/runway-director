@@ -469,8 +469,8 @@ body.theater .theater-exit-hint { display: block; }
       <div class="form-group">
         <label>Target Duration (Seconds)</label>
         <div class="duration-row">
-          <input type="range" id="durationSlider" min="10" max="120" value="30" oninput="document.getElementById('inDuration').value = this.value">
-          <input type="number" id="inDuration" class="duration-num" value="30" min="10" max="120" oninput="document.getElementById('durationSlider').value = this.value">
+          <input type="range" id="durationSlider" min="15" max="120" value="30" step="5" oninput="document.getElementById('inDuration').value = this.value">
+          <input type="number" id="inDuration" class="duration-num" value="30" min="15" max="120" step="5" oninput="document.getElementById('durationSlider').value = this.value">
         </div>
       </div>
 

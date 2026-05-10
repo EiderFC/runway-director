@@ -129,7 +129,11 @@ Pacing: {pacing}.
 CRITICAL RULES:
 1. Maintain EXACT SAME character, clothing, and environment across all shots — describe a strict, repeatable subject in 'character_bible'.
 2. Keep actions physically plausible, safe, and free of violence, weapons, blood, or destruction.
-3. MATHEMATICAL REQUIREMENT: split the sequence into shots of 5 to 10 seconds. The SUM of all "duration" values MUST be EXACTLY {total_duration}.
+3. MATHEMATICAL REQUIREMENT (HARD CONSTRAINT — DO NOT VIOLATE):
+   - Each shot's "duration" MUST be an INTEGER between 5 and 10 (inclusive). NEVER 1, 2, 3, or 4.
+   - The SUM of all "duration" values MUST be EXACTLY {total_duration}.
+   - If {total_duration} cannot be split into chunks of 5–10 (e.g. 13 cannot be split as 5+5+3), use FEWER shots (e.g. 13 → one 5s shot + one 8s shot, or just one 10s shot).
+   - Check your math twice before answering.
 4. Each "action" MUST be 1–2 vivid sentences, present-tense, focused on visible motion and concrete imagery (not metaphors).
 5. Give every shot a short, evocative "title" (3–5 words).
 
@@ -145,13 +149,100 @@ Return ONLY a JSON object:
 """.strip()
 
 
+def _sanitize_durations(shots, total_duration, min_dur=5, max_dur=10):
+    """Ensure every shot duration is in [min_dur, max_dur] and shots sum to total.
+    Drops/merges/redistributes as needed. Mutates and returns the shots list.
+    """
+    if not shots:
+        # Fallback: one shot covering the whole duration (clamped)
+        return [{"title": "Scene", "duration": max(min_dur, min(max_dur, total_duration)),
+                 "action": "Cinematic establishing shot of the scene."}]
+
+    # First pass: clamp absurd values
+    for s in shots:
+        try:
+            s["duration"] = int(s.get("duration", min_dur))
+        except Exception:
+            s["duration"] = min_dur
+
+    # If any shot < min_dur, merge into neighbour
+    cleaned = []
+    for s in shots:
+        if s["duration"] < min_dur and cleaned:
+            # merge into previous
+            cleaned[-1]["duration"] += s["duration"]
+        else:
+            cleaned.append(s)
+    shots = cleaned
+
+    # Cap maxima
+    for s in shots:
+        if s["duration"] > max_dur:
+            s["duration"] = max_dur
+
+    # Adjust total
+    diff = total_duration - sum(s["duration"] for s in shots)
+    while diff != 0 and shots:
+        if diff > 0:
+            # add 1s to a shot that has room
+            grew = False
+            for s in shots:
+                if s["duration"] < max_dur:
+                    s["duration"] += 1
+                    diff -= 1
+                    grew = True
+                    if diff == 0: break
+            if not grew:
+                # All shots at max — append a new minimum shot if we can
+                if diff >= min_dur:
+                    shots.append({"title": "Coda",
+                                  "duration": min(diff, max_dur),
+                                  "action": "Lingering closing beat of the scene."})
+                    diff -= shots[-1]["duration"]
+                else:
+                    break
+        else:
+            # need to shrink
+            shrunk = False
+            for s in shots:
+                if s["duration"] > min_dur:
+                    s["duration"] -= 1
+                    diff += 1
+                    shrunk = True
+                    if diff == 0: break
+            if not shrunk:
+                # Last resort: drop trailing shots
+                if len(shots) > 1:
+                    diff += shots[-1]["duration"]
+                    shots.pop()
+                else:
+                    break
+
+    # Final safety: any shot still under min becomes min (very rare)
+    for s in shots:
+        if s["duration"] < min_dur:
+            s["duration"] = min_dur
+
+    return shots
+
+
 def director_generate(openai_client, topic, total_duration, pacing):
     chat = openai_client.chat.completions.create(
         model="gpt-4o",
         response_format={"type": "json_object"},
         messages=[{"role": "system", "content": build_director_prompt(topic, total_duration, pacing)}],
     )
-    return json.loads(chat.choices[0].message.content)
+    plan = json.loads(chat.choices[0].message.content)
+    original = list(plan.get("shots", []))
+    fixed = _sanitize_durations(original, total_duration)
+    if [s.get("duration") for s in original] != [s["duration"] for s in fixed] or len(original) != len(fixed):
+        wlog(
+            f"   ⚖ Adjusted shot durations to satisfy 5-10s rule "
+            f"({[s.get('duration') for s in original]} → {[s['duration'] for s in fixed]}).",
+            "warning",
+        )
+    plan["shots"] = fixed
+    return plan
 
 
 def _extract_complete_shots(buffer):
